@@ -1,3 +1,0 @@
-C:/Users/akram/Desktop/Projects/MyRedis/cmake-build-debug/CMakeFiles/MyRedis.dir
-C:/Users/akram/Desktop/Projects/MyRedis/cmake-build-debug/CMakeFiles/edit_cache.dir
-C:/Users/akram/Desktop/Projects/MyRedis/cmake-build-debug/CMakeFiles/rebuild_cache.dir
