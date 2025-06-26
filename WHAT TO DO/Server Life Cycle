@@ -1,0 +1,22 @@
+Server Life Cycle (high-level flow)
+
+    🧼 Initialize Winsock
+
+    🔌 Create socket
+
+    🧭 Bind socket to address (IP + port)
+
+    🧏 Listen for incoming connections
+
+    👋 Accept client
+
+    📥 Receive command
+
+    🧠 Parse + interpret
+
+    📤 Send back response
+
+    🔁 Repeat for new clients
+
+    🧹 Close everything and clean up
+

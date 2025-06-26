@@ -1,0 +1,3 @@
+C:/Users/akram/Desktop/Projects/MyRedis/cmake-build-debug-visual-studio/CMakeFiles/MyRedis.dir
+C:/Users/akram/Desktop/Projects/MyRedis/cmake-build-debug-visual-studio/CMakeFiles/edit_cache.dir
+C:/Users/akram/Desktop/Projects/MyRedis/cmake-build-debug-visual-studio/CMakeFiles/rebuild_cache.dir

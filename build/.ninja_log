@@ -1,0 +1,12 @@
+# ninja log v6
+4	855	7709955996958358	CMakeFiles/MyRedis.dir/main.cpp.obj.ddi	d483cd77a45719fc
+855	897	7709956005807823	CMakeFiles/MyRedis.dir/CXX.dd	ce9f9a2bd33837e4
+855	897	7709956005807823	C:/Users/akram/Desktop/Projects/MyRedis/build/CMakeFiles/MyRedis.dir/CXXModules.json	ce9f9a2bd33837e4
+855	897	7709956005807823	CMakeFiles/MyRedis.dir/main.cpp.obj.modmap	ce9f9a2bd33837e4
+898	2645	7709956005899277	CMakeFiles/MyRedis.dir/main.cpp.obj	f7665bae07628ab8
+2649	2820	7709956023408066	MyRedis.exe	aeb4d9e7d527a302
+7	824	7710935763500671	CMakeFiles/MyRedis.dir/main.cpp.obj.ddi	d483cd77a45719fc
+825	872	7710935771672606	CMakeFiles/MyRedis.dir/CXX.dd	ce9f9a2bd33837e4
+825	872	7710935771672606	C:/Users/akram/Desktop/Projects/MyRedis/build/CMakeFiles/MyRedis.dir/CXXModules.json	ce9f9a2bd33837e4
+825	872	7710935771672606	CMakeFiles/MyRedis.dir/main.cpp.obj.modmap	ce9f9a2bd33837e4
+873	2741	7710935772161742	CMakeFiles/MyRedis.dir/main.cpp.obj	f7665bae07628ab8

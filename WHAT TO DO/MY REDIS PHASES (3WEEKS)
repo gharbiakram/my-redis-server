@@ -1,0 +1,38 @@
+Project Phases (With Realistic Weekly Goals)
+✅ Phase 1: Setup + Echo Server (1–2 days) **********
+
+    Create a new project in CLion ✅
+
+    Write a TCP server that accepts one client and echoes messages back✅
+
+    Understand Winsock if you're on Windows✅
+
+✅ Phase 2: Command Recognition (2–3 days) TODO
+
+    Convert received raw messages into commands
+
+    Support: PING, ECHO <msg>, SET key value, GET key, DEL key
+
+    No need for full RESP support yet — just split text
+
+✅ Phase 3: In-Memory Storage (2–3 days)
+
+    Store data in std::unordered_map<std::string, std::string>
+
+    Make SET, GET, and DEL operate on it
+
+    Clean up command handling into functions
+
+✅ Phase 4: RESP Protocol (3–4 days)
+
+    Parse real Redis protocol: RESP (REdis Serialization Protocol)
+
+    Support clients like redis-cli
+
+    Example: *3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n
+
+✅ Phase 5: Multiclient (4–5 days)
+
+    Use select() or threads to handle multiple clients
+
+    Handle one client at a time for now; scale later if you wish

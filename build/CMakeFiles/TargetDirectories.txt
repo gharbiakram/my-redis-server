@@ -1,0 +1,3 @@
+C:/Users/akram/Desktop/Projects/MyRedis/build/CMakeFiles/MyRedis.dir
+C:/Users/akram/Desktop/Projects/MyRedis/build/CMakeFiles/edit_cache.dir
+C:/Users/akram/Desktop/Projects/MyRedis/build/CMakeFiles/rebuild_cache.dir

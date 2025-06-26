@@ -1,0 +1,14 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "CMakeFiles\\MyRedis.dir\\main.cpp.obj",
+            "outputs": [
+                "C:\\Users\\akram\\Desktop\\Projects\\MyRedis\\cmake-build-debug-visual-studio\\vc140.pdb",
+                "CMakeFiles\\MyRedis.dir\\main.cpp.obj.ddi"
+            ],
+            "requires": []
+        }
+    ]
+}
