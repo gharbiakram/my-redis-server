@@ -78,6 +78,7 @@ private:
             }
         }
     }
+    // Deprecated
     bool receive_request(const SOCKET& client) {
         Connection* conn = connections[client].getConnection();
         char* r_buffer = conn->getReadBuffer();
@@ -117,12 +118,42 @@ private:
         }
         return false;
     }
+    // Deprecated
     static ProtocolStatus try_parse(const char* r_buffer,uint32_t& len , const size_t MaxCount) {
         memcpy(&len, r_buffer, MaxCount);
         if (len <= 0 || len > MAX_LENGTH) {
             Debug::error("Malformed protocol : Bad message length");
             return ProtocolStatus::Malformed;
         }
+        return ProtocolStatus::Ok;
+    }
+    static ProtocolStatus parse_command(const char* r_buffer,uint32_t& len, const size_t buffer_size) {
+        uint32_t nstr = 0;
+        memcpy(&nstr, r_buffer, 4); // extract the current number of strings in the cmd
+        if (nstr < 2 || nstr > 64) { // arbitrary sanity check
+            Debug::error("Malformed protocol: invalid nstr");
+            return ProtocolStatus::Malformed;
+        }
+        size_t offset = 4;
+        for (uint32_t i = 0; i < nstr; i++) {
+            if (offset + 4 >= buffer_size) {
+                Debug::error("Malformed protocol : Bad command length");
+                return ProtocolStatus::Malformed;
+            }
+            uint32_t current = 0;
+            memcpy(&current, r_buffer + offset, 4);
+            if (current > buffer_size - 4 || current <= 0) {
+                Debug::error("Malformed protocol : Bad command length");
+                return ProtocolStatus::Malformed;
+            }
+            offset += 4;
+            if (offset + current > buffer_size) {
+                Debug::error("Malformed protocol : Incomplete Command");
+                return ProtocolStatus::Incomplete;
+            }
+            offset += current;
+        }
+        len = offset;
         return ProtocolStatus::Ok;
     }
     static bool send_response(Connection* conn) {
@@ -204,19 +235,17 @@ private:
         conn->extendBuffer(static_cast<size_t>(rv));
         assert(rbuff_size <= sizeof(rbuff));
         while (try_one_request(conn)) {/*DO NOTHING*/}
-        return conn->getState() == utils::ConnectionState::Req;
+        return
+        (conn->getState() == utils::ConnectionState::Req);
         //Continue Looping if the current state is REQ
     }
     static bool try_one_request(Connection* conn) {
         auto r_buff_size = conn->getReadBufferSize();
         char* r_buffer = conn->getReadBuffer();
-        if (r_buff_size < 4) {
-            Debug::error("Not enough data in the buffer");
-            return false;
-        }
-        uint32_t len = 0 ;
-        if (try_parse(r_buffer,len, 4) == ProtocolStatus::Malformed) {
-            Debug::error("Malformed request");
+        std::vector<std::string> args;
+        uint32_t len = 0 ; // The command length
+        auto command_status = parse_command(r_buffer,len,r_buff_size);
+        if (command_status == ProtocolStatus::Malformed || command_status == ProtocolStatus::Incomplete ) {
             conn->setState(ConnectionState::End);
             return false;
         }
