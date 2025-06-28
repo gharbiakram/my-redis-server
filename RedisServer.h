@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <map>
 #include <unordered_map>
 #include <vector>
 #include <winsock2.h>
@@ -127,7 +128,7 @@ private:
         }
         return ProtocolStatus::Ok;
     }
-    static ProtocolStatus parse_command(const char* r_buffer,uint32_t& len, const size_t buffer_size) {
+    static ProtocolStatus parse_command(const char* r_buffer,uint32_t& len, const size_t buffer_size,std::vector<std::string>& cmds) {
         uint32_t nstr = 0;
         memcpy(&nstr, r_buffer, 4); // extract the current number of strings in the cmd
         if (nstr < 2 || nstr > 64) { // arbitrary sanity check
@@ -140,20 +141,23 @@ private:
                 Debug::error("Malformed protocol : Bad command length");
                 return ProtocolStatus::Malformed;
             }
-            uint32_t current = 0;
-            memcpy(&current, r_buffer + offset, 4);
-            if (current > buffer_size - 4 || current <= 0) {
+            uint32_t current_len = 0;
+            memcpy(&current_len, r_buffer + offset, 4);
+            if (current_len > buffer_size - 4 || current_len <= 0) {
                 Debug::error("Malformed protocol : Bad command length");
                 return ProtocolStatus::Malformed;
             }
             offset += 4;
-            if (offset + current > buffer_size) {
+            if (offset + current_len > buffer_size) {
                 Debug::error("Malformed protocol : Incomplete Command");
                 return ProtocolStatus::Incomplete;
             }
-            offset += current;
+            char* argument = '';
+            memcpy(&argument, r_buffer + offset, current_len);
+            cmds.emplace_back(argument);
+            offset += current_len;
         }
-        len = offset;
+        len = offset - 4;
         return ProtocolStatus::Ok;
     }
     static bool send_response(Connection* conn) {
@@ -239,32 +243,42 @@ private:
         (conn->getState() == utils::ConnectionState::Req);
         //Continue Looping if the current state is REQ
     }
-    static bool try_one_request(Connection* conn) {
+    bool try_one_request(Connection* conn) {
         auto r_buff_size = conn->getReadBufferSize();
         char* r_buffer = conn->getReadBuffer();
-        std::vector<std::string> args;
+        std::vector<std::string> cmds;
         uint32_t len = 0 ; // The command length
-        auto command_status = parse_command(r_buffer,len,r_buff_size);
+        auto command_status = parse_command(r_buffer,len,r_buff_size,cmds);
         if (command_status == ProtocolStatus::Malformed || command_status == ProtocolStatus::Incomplete ) {
             conn->setState(ConnectionState::End);
             return false;
         }
-        if (4 + len > r_buff_size) {
+        if (8 + len > r_buff_size) {
             Debug::error("Not enough data in the buffer");
             return false;
         }
-        if (4 + len > MAX_LENGTH) {
+        if (8 + len > MAX_LENGTH) {
             Debug::error("Message too long");
             conn->setState(ConnectionState::End);
             return false;
         }
-        std::cout << "Client " << conn->getSocket() << " sent: " << std::string(&r_buffer[4], len) << "\n";
-        size_t remaining = r_buff_size - (4 + len);
+        auto cmd_state = do_cmd(cmds);
+        if (cmd_state == CommandStatus::Bad) {
+            utils::Debug::error("Bad command");
+            conn->setState(ConnectionState::End);
+            return false;
+        }
+        const size_t remaining = r_buff_size - (8 + len);
         if (remaining > 0) {
             //Remove the request
-            std::memmove(&r_buffer,&r_buffer[4+len],remaining);
+            std::memmove(&r_buffer,&r_buffer[8+len],remaining);
         }
-        r_buff_size = remaining;
+        else {
+            Debug::error("Not enough data in the buffer");
+            conn->setState(ConnectionState::End);
+            return false;
+        }
+        conn->setReadBufferSize(remaining);
         conn->setState(ConnectionState::Res);
         state_response(conn);
         return conn->getState() == ConnectionState::Req;
@@ -277,6 +291,63 @@ private:
             return;
         }
         conn->setState(ConnectionState::Req);
+    }
+    CommandStatus do_cmd(std::vector<std::string>& cmds) {
+        size_t cmd_size = cmds.size();
+        if (cmd_size < 2 || cmd_size > 3) {
+            Debug::error("Invalid command size");
+            return CommandStatus::Bad;
+        }
+        if (cmd_size == 2 && equalsIgnoreCase(cmds[0], "get")) {
+            std::string val;
+            const bool status = GET(cmds[1],val);
+            if (status == false) {
+                return CommandStatus::Bad;
+            }
+            std::cout << "GOT : " << val << std::endl;
+            return CommandStatus::Good;
+        }
+        if (cmd_size == 3 && equalsIgnoreCase(cmds[0], "set")) {
+            const bool status = SET(cmds[1],cmds[2]);
+            if (status == false) {
+                return CommandStatus::Bad;
+            }
+            return CommandStatus::Good;
+        }
+        if (cmd_size == 2 && equalsIgnoreCase(cmds[0], "del")) {
+            const bool status =  DEL(cmds[1]);
+            if (status == false) {
+                return CommandStatus::Bad;
+            }
+            return CommandStatus::Good;
+        }
+        return CommandStatus::Bad;
+    }
+    bool GET(const std::string& key,std::string& val) {
+        if (map.empty()) {
+            return false;
+        }
+        if (!map.contains(key)) {
+            return false;
+        }
+        val = map[key];
+        return true;
+    }
+    bool SET(const std::string& key,const std::string& val) {
+        if (map.contains(key)) {
+            std::cerr << "Key already exists" << std::endl;
+            return false;
+        }
+        map.insert({key,val});
+        return true;
+    }
+    bool DEL(const std::string& key) {
+        if (map.empty() || !map.contains(key)) {
+            std::cerr << "Key doesn't exist" << std::endl;
+            return false;
+        }
+        map.erase(key);
+        return true;
     }
     void log_conn() {
         for (auto& conn : connections) {
@@ -296,4 +367,5 @@ private:
     ServerAddress address;
     Poller poller;
     std::unordered_map<SOCKET,RedisClient> connections{};
+    std::map<std::string,std::string> map{};
 };

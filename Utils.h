@@ -23,7 +23,10 @@ namespace utils {
         Malformed,
         Incomplete,
     };
-
+    enum class CommandStatus {
+        Bad,
+        Good,
+    };
     enum class ConnectionState {
         Req,
         Res,
@@ -69,6 +72,19 @@ namespace utils {
             return IOStatus::Ok;
         }
     };
+
+    static bool equalsIgnoreCase(const std::string& a, const std::string& b) {
+        if (a.size() != b.size()) return false;
+
+        for (size_t i = 0; i < a.size(); ++i) {
+            if (std::tolower(static_cast<unsigned char>(a[i])) !=
+                std::tolower(static_cast<unsigned char>(b[i]))) {
+                return false;
+                }
+        }
+
+        return true;
+    }
 
     class Debug {
     public:
