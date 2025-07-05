@@ -59,9 +59,9 @@ public:
 
     // --- Setters ---
     void setReadBufferSize(size_t size) {
-        if (size <= sizeof(rbuf)) rbuf_size = size;
+        std::cout << ">> setReadBufferSize called with: " << size << std::endl;
+        rbuf_size = size;
     }
-
     void setWriteBufferSize(size_t size) {
         if (size <= sizeof(wbuf)) wbuf_size = size;
     }
@@ -104,7 +104,14 @@ public:
         this->rbuf_size += len;
     }
     size_t getReadBufferCapacity() const {
-        return rbuf_size;
+        return sizeof(rbuf);
+    }
+    void flushWriteBuffer() {
+        if (wbuf_size > sizeof(wbuf)) return;
+        std::ranges::fill(wbuf, 0);
+    }
+    void setReadBuffer(const char* data) {
+        memcpy(rbuf, data, rbuf_size);
     }
 
 private:

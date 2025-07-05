@@ -1,6 +1,6 @@
 #pragma once
-#include <cstdint>
 #include <cstdio>
+#include <iostream>
 #include <Winsock2.h>
 
 
@@ -24,8 +24,12 @@ namespace utils {
         Incomplete,
     };
     enum class CommandStatus {
-        Bad,
-        Good,
+        OK,
+        KeyNotFound,
+        ValAlreadyExists,
+        KeyNoExist,
+        SyntaxError,
+        InvalidCommand
     };
     enum class ConnectionState {
         Req,
@@ -94,11 +98,12 @@ namespace utils {
         static void echo(const int val) {
             printf("%d\n",val);
         }
-        static void error(const char* msg) {
-            printf("%s\n",msg);
-        }
+
         static void error(const int val) {
             printf("%d\n",val);
+        }
+        static void error(const std::string& msg) {
+            std::cerr << "[ERROR] " << msg << std::endl;
         }
         static void die(const char* err) {
            throw std::runtime_error(err);

@@ -74,59 +74,9 @@ private:
         if (connections[client_fd].getState() == ConnectionState::Req) {
             state_request(client_fd);
             if (connections[client_fd].getState() == ConnectionState::End) {
-                Debug::echo("Client disconnected");
                 remove_client(client_fd);
             }
         }
-    }
-    // Deprecated
-    bool receive_request(const SOCKET& client) {
-        Connection* conn = connections[client].getConnection();
-        char* r_buffer = conn->getReadBuffer();
-        IOStatus io_status = ProtocolParser::recv_full(client, r_buffer, 4);
-        switch (io_status) {
-            case IOStatus::Error: {
-                Debug::error("Socket Error");
-                conn->setState(ConnectionState::End);
-                break;
-            }
-            case IOStatus::Disconnected: {
-                Debug::error("Client Disconnected");
-                conn->setState(ConnectionState::End);
-                break;
-            }
-            case IOStatus::Ok: {
-                uint32_t len;
-                ProtocolStatus ps = try_parse(r_buffer,len,4);
-                if (ps == ProtocolStatus::Malformed) {
-                    conn->setState(ConnectionState::End);
-                }
-                io_status = ProtocolParser::recv_full(client, r_buffer + 4, (int)len);
-                if (io_status == IOStatus::Error || io_status == IOStatus::Disconnected) {
-                    conn->setState(ConnectionState::End);
-                }
-                r_buffer[4 + len] = '\0'; //Add null termination
-                std::cout << "[Client:"<< client << "] sent -> " << &r_buffer[4] << std::endl;
-                //Ready to respond
-                conn->setState(ConnectionState::Res);
-                return true;
-            }
-            case IOStatus::WouldBlock: {
-                return true;
-            }
-            default:
-                Debug::error("Invalid Status");
-        }
-        return false;
-    }
-    // Deprecated
-    static ProtocolStatus try_parse(const char* r_buffer,uint32_t& len , const size_t MaxCount) {
-        memcpy(&len, r_buffer, MaxCount);
-        if (len <= 0 || len > MAX_LENGTH) {
-            Debug::error("Malformed protocol : Bad message length");
-            return ProtocolStatus::Malformed;
-        }
-        return ProtocolStatus::Ok;
     }
     static ProtocolStatus parse_command(const char* r_buffer,uint32_t& len, const size_t buffer_size,std::vector<std::string>& cmds) {
         uint32_t nstr = 0;
@@ -152,25 +102,28 @@ private:
                 Debug::error("Malformed protocol : Incomplete Command");
                 return ProtocolStatus::Incomplete;
             }
-            char* argument = '';
-            memcpy(&argument, r_buffer + offset, current_len);
-            cmds.emplace_back(argument);
+            cmds.emplace_back(r_buffer + offset, current_len);
             offset += current_len;
         }
         len = offset - 4;
+        std::cout << "nstr = " << nstr << std::endl;
+        std::cout << "len = " << len << std::endl;
         return ProtocolStatus::Ok;
     }
-    static bool send_response(Connection* conn) {
+    static bool send_response(Connection* conn ,CommandStatus status) {
         char* w_buffer = conn->getWriteBuffer();
-        const char reply[] = "Acknowledged";
-        int length = static_cast<int>(strlen(reply));
-        if (length <= 0 || length > utils::MAX_LENGTH) {
+        std::string statusStr = statusToString(status);
+        int length = static_cast<int>(statusStr.length());
+        if (length <= 0 || length > utils::MAX_LENGTH - 4) {
             conn->setState(ConnectionState::End);
             Debug::error("Inappropriate response length");
             return false;
         }
-        memcpy(w_buffer, &length, 4);
-        memcpy(&w_buffer[4], reply, length);
+        // Copy status code (4 bytes)
+        memcpy(w_buffer, &status, 4);
+        // Copy string content
+        memcpy(w_buffer + 4, statusStr.c_str(), length);
+        // Send full response
         IOStatus io_status = utils::ProtocolParser::send_full(conn->getSocket(), w_buffer, 4 + length);
         if (io_status == IOStatus::Error || io_status == IOStatus::Disconnected) {
             conn->setState(ConnectionState::End);
@@ -192,7 +145,6 @@ private:
     }
     void disconnect_client(const SOCKET socket) {
         connections.erase(socket);
-        utils::Debug::echo("Client disconnected");
     }
     void remove_client(const SOCKET socket) {
         disconnect_client(socket);
@@ -208,7 +160,7 @@ private:
         char *rbuff = conn->getReadBuffer();
         auto rbuff_size = conn->getReadBufferSize();
         const auto capacity = conn->getReadBufferCapacity();
-        assert(rbuff_size < capacity);
+        //assert(rbuff_size < capacity);
         int rv = 0;
         //Try again if there's an error or an interruption
         do {
@@ -236,6 +188,7 @@ private:
             utils::Debug::error("disconnecting...");
             return false;
         }
+        std::cout << rv << std::endl;
         conn->extendBuffer(static_cast<size_t>(rv));
         assert(rbuff_size <= sizeof(rbuff));
         while (try_one_request(conn)) {/*DO NOTHING*/}
@@ -245,15 +198,29 @@ private:
     }
     bool try_one_request(Connection* conn) {
         auto r_buff_size = conn->getReadBufferSize();
+        if (r_buff_size <= 0) {
+            Debug::echo("No commands left , disconnecting...");
+            conn->setState(utils::ConnectionState::End);
+            return false;
+        }
         char* r_buffer = conn->getReadBuffer();
         std::vector<std::string> cmds;
         uint32_t len = 0 ; // The command length
-        auto command_status = parse_command(r_buffer,len,r_buff_size,cmds);
-        if (command_status == ProtocolStatus::Malformed || command_status == ProtocolStatus::Incomplete ) {
+        auto protocol_status = parse_command(r_buffer,len,r_buff_size,cmds);
+        std::cout << "Raw buffer (hex): ";
+        for (size_t i = 0; i < r_buff_size; i++) {
+            printf("%02x ", static_cast<unsigned char>(r_buffer[i]));
+        }
+        std::cout << "\n";
+        for (size_t i = 0; i < r_buff_size; i++) {
+            std::cout << r_buffer[i];
+        }
+        std::cout << "\n";
+        if (protocol_status == ProtocolStatus::Malformed || protocol_status == ProtocolStatus::Incomplete ) {
             conn->setState(ConnectionState::End);
             return false;
         }
-        if (8 + len > r_buff_size) {
+        if ((len + 4) > r_buff_size) {
             Debug::error("Not enough data in the buffer");
             return false;
         }
@@ -262,29 +229,26 @@ private:
             conn->setState(ConnectionState::End);
             return false;
         }
-        auto cmd_state = do_cmd(cmds);
-        if (cmd_state == CommandStatus::Bad) {
-            utils::Debug::error("Bad command");
-            conn->setState(ConnectionState::End);
-            return false;
+        CommandStatus cmd_state = do_cmd(cmds);
+        const size_t total_request_size = 4 + len;
+        const size_t remaining = r_buff_size - total_request_size;
+        std::cout << "re " << remaining << std::endl;
+        if (remaining >= 0) {
+            std::cout << "remaining = " << remaining << std::endl;
+            std::memmove(r_buffer, r_buffer + total_request_size, remaining);
+            conn->setReadBufferSize(remaining);
         }
-        const size_t remaining = r_buff_size - (8 + len);
-        if (remaining > 0) {
-            //Remove the request
-            std::memmove(&r_buffer,&r_buffer[8+len],remaining);
+
+        for (size_t i = 0; i < remaining; i++) {
+            std::cout << r_buffer[i];
         }
-        else {
-            Debug::error("Not enough data in the buffer");
-            conn->setState(ConnectionState::End);
-            return false;
-        }
-        conn->setReadBufferSize(remaining);
+        std::cout << "\n";
         conn->setState(ConnectionState::Res);
-        state_response(conn);
+        state_response(conn,cmd_state);
         return conn->getState() == ConnectionState::Req;
     }
-    static void state_response(Connection* conn) {
-        bool io_status = send_response(conn);
+    static void state_response(Connection* conn,CommandStatus status) {
+        bool io_status = send_response(conn,status);
         if (io_status == false) {
             Debug::error("Failed to send response");
             conn->setState(ConnectionState::End);
@@ -292,36 +256,43 @@ private:
         }
         conn->setState(ConnectionState::Req);
     }
-    CommandStatus do_cmd(std::vector<std::string>& cmds) {
+    CommandStatus do_cmd(const std::vector<std::string>& cmds) {
         size_t cmd_size = cmds.size();
         if (cmd_size < 2 || cmd_size > 3) {
-            Debug::error("Invalid command size");
-            return CommandStatus::Bad;
+            Debug::echo("Invalid command size");
+            return CommandStatus::InvalidCommand;
         }
         if (cmd_size == 2 && equalsIgnoreCase(cmds[0], "get")) {
             std::string val;
             const bool status = GET(cmds[1],val);
             if (status == false) {
-                return CommandStatus::Bad;
+                Debug::echo("KeyNotFound");
+                return CommandStatus::KeyNotFound;
             }
             std::cout << "GOT : " << val << std::endl;
-            return CommandStatus::Good;
+            Debug::echo("OK (get)");
+            return CommandStatus::OK;
         }
         if (cmd_size == 3 && equalsIgnoreCase(cmds[0], "set")) {
             const bool status = SET(cmds[1],cmds[2]);
             if (status == false) {
-                return CommandStatus::Bad;
+                Debug::echo("ValAlreadyExists");
+                return CommandStatus::ValAlreadyExists;
             }
-            return CommandStatus::Good;
+            Debug::echo("OK (set)");
+            return CommandStatus::OK;
         }
         if (cmd_size == 2 && equalsIgnoreCase(cmds[0], "del")) {
             const bool status =  DEL(cmds[1]);
             if (status == false) {
-                return CommandStatus::Bad;
+                Debug::echo("KeyNoExist");
+                return CommandStatus::KeyNoExist;
             }
-            return CommandStatus::Good;
+            Debug::echo("OK (del)");
+            return CommandStatus::OK;
         }
-        return CommandStatus::Bad;
+        Debug::echo("Invalid command");
+        return CommandStatus::SyntaxError;
     }
     bool GET(const std::string& key,std::string& val) {
         if (map.empty()) {
@@ -349,9 +320,15 @@ private:
         map.erase(key);
         return true;
     }
-    void log_conn() {
-        for (auto& conn : connections) {
-            std::cout << conn.first << "->" << "Client.." <<std::endl;
+    static std::string statusToString(CommandStatus status) {
+        switch (status) {
+            case CommandStatus::InvalidCommand: return "InvCMD";
+            case CommandStatus::KeyNoExist: return "KnX";
+            case CommandStatus::ValAlreadyExists: return "VALX";
+            case CommandStatus::SyntaxError: return "SynErr";
+            case CommandStatus::KeyNotFound: return "KnF";
+            case CommandStatus::OK: return "Ok";
+            default: return "?";
         }
     }
 public:
